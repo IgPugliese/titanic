@@ -1,12 +1,31 @@
 import pandas as pd
-
 df = pd.read_csv("train.csv")
-df["Sex"] = df['Sex'].transform(lambda x: (x == "male").astype(int))
-org_ages = df['Age'].values
-df['Age'] = df['Age'].fillna(df.groupby(['Pclass', 'Sex'])['Age'].transform('median'))
-predicted_ages = df['Age'].values
 
-for i, (x, y) in enumerate(zip(org_ages, predicted_ages)):
-    color = '\033[92m\033[1m' if x != y else '\033[30m'
-    enda = "\n" if i % 10 == 0 else "    "
-    print(f"{color}{y:05.2f}\033[0m", end=enda)
+# going crazy
+pd.set_option('display.max_rows', None)      
+
+# setting sex as binary
+df["Sex"] = df['Sex'].transform(lambda x: (x == "male").astype(int))
+
+# filling ages
+org_ages = df.loc[df['Age'].isna()].index
+df['Age'] = df['Age'].fillna(df.groupby(['Pclass', 'Sex'])['Age'].transform('median')).round()
+predicted_ages = df.loc[org_ages]
+
+
+df['FamilyNumber'] = df['SibSp'] + df['Parch']
+
+df["Cabin"] = df['Cabin'].transform(lambda x: (~x.isna()).astype(bool))
+
+df['Embarked'] = df['Embarked'].fillna('S')
+
+
+# deleting passager id to avoid noise
+del df['PassengerId']
+
+print(df)
+
+
+
+
+
