@@ -2,66 +2,70 @@ import pandas as pd
 import numpy as np
 import re
 import sklearn as skt
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
 from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
 
 df = pd.read_csv("train.csv")
- #{}
-# going crazy
 pd.set_option('display.max_rows', None)      
 
-def modelate_nobiliarie_titles(nombre):
-    nobiliary_diccionary={'Mrs.':'Mrs','Miss.':'Miss','Mr.':'Mr','Master.':'Master'}
-    match= re.search(r'\b\w+\.', nombre)
-    nobiliary_title=match.group().lstrip()
-    return nobiliary_diccionary.get(nobiliary_title,'Rare')
+class XPreprosessior():
+    def __init__(self):
+        self.age_medians_per_class_and_sex = None
+        
+    def fit(self, X, y=None):
+        self.age_medians_per_class_and_sex = X.groupby(['Pclass', 'Sex'])['Age'].median().to_dict()
+        return self
 
-def data_treatmeant(df):
-    df["Sex"] = df['Sex'].transform(lambda x: (x == "male").astype(int))
-    # filling ages
-    org_ages = df.loc[df['Age'].isna()].index
-    df['Age'] = df['Age'].fillna(df.groupby(['Pclass', 'Sex'])['Age'].transform('median')).round()
-    predicted_ages = df.loc[org_ages]
+    def transform(self, X):
+        df = X.copy()
 
-    # total family number
-    df['FamilyNumber'] = df['SibSp'] + df['Parch']
+        # filling ages
+        mask = df["Age"].isna()
+        df.loc[mask, 'Age'] = df[mask].apply(self.lookup_age, axis=1)
 
-    # cast cabin to binary
-    df["Cabin"] = df['Cabin'].transform(lambda x: (~x.isna()).astype(bool))
+        df["Sex"] = df['Sex'].transform(lambda x: (x == "male").astype(int))
 
-    #first approac to filling embarked
-    df['Embarked'] = df['Embarked'].fillna('S')
+        # total family number
+        df['FamilyNumber'] = df['SibSp'] + df['Parch']
 
-    #creation of ticketCount, farePerPerson and their transform to log scale
-    df['TicketCount'] = df['Ticket'].transform(lambda x: len(df[df['Ticket'] == x]))
-    df['FarePerPerson'] = df['Fare'] / df['TicketCount']
-    df['FarePerPerson'] = np.where(df['FarePerPerson'] == 0, 0, np.log(df['FarePerPerson']))
-    df['Fare'] = np.where(df['Fare'] == 0, 0, np.log(df['Fare']))
-    df['Title']=df['Name'].map(modelate_nobiliarie_titles)
-    del df['Ticket']
-    del df['PassengerId']
-    del df['Name']
-    del df['Fare']
-    df = pd.get_dummies(df, columns=['Embarked',"Title"], prefix=['OheEmbarked','OheTitle'])
-    return df
+        # cast cabin to binary
+        df["Cabin"] = df['Cabin'].transform(lambda x: (~x.isna()).astype(bool))
 
+        #first approac to filling embarked
+        df['Embarked'] = df['Embarked'].fillna('S')
+
+        mask = df['Fare'] > 0
+        df.loc[mask, 'Fare'] = np.log1p(df.loc[mask, 'Fare'])
+
+        df['Title']=df['Name'].map(self.modelate_nobiliarie_titles)
+        del df['Ticket']
+        del df['PassengerId']
+        del df['Name']
+
+        df = pd.get_dummies(df, columns=['Embarked',"Title"], prefix=['OheEmbarked','OheTitle'])
+        return df
+
+    def modelate_nobiliarie_titles(self, nombre):
+        nobiliary_diccionary={'Mrs.':'Mrs','Miss.':'Miss','Mr.':'Mr','Master.':'Master'}
+        match= re.search(r'\b\w+\.', nombre)
+        nobiliary_title=match.group().lstrip()
+        return nobiliary_diccionary.get(nobiliary_title,'Rare')
+    
+    def lookup_age(self, row):
+        return self.age_medians_per_class_and_sex.get((row["Pclass"], row["Sex"]))
+    
 y=df.pop('Survived')
 
-X_train, X_test, y_train, y_test = train_test_split(df, y, random_state=0,test_size=0.1)
-X_train_treated= data_treatmeant(X_train)
-x_test_treated=data_treatmeant(X_test)
-
+data_preprocessor = XPreprosessior()
 model= LogisticRegression(max_iter=10000)
-model.fit(X_train_treated,y_train)
-print(model.score(X_train,y_train))
-print(model.score(X_test,y_test))
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-#wat
-
-
-#model titles in names
+pipeline = Pipeline([('pre-processor', data_preprocessor), ('logisticRegression', model)])
+cv_scores = cross_val_score(pipeline, df, y, cv=cv, scoring='accuracy')
 
 
+print(f"Mean CV Precision: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
 
 
 
