@@ -11,6 +11,8 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.base import clone
 from sklearn.model_selection import GridSearchCV
 from noise_remover import NoiseRemover
+from sklearn.model_selection import PredefinedSplit, GridSearchCV
+from xgboost.callback import EarlyStopping
 
 df = pd.read_csv("train.csv")
 dt = pd.read_csv("test.csv")
@@ -18,21 +20,26 @@ pd.set_option('display.max_rows', None)
 
 
 model= XGBClassifier(
-    objective="binary:logistic", # modela conteos
+    objective="binary:logistic",
+    eval_metric="logloss",       # modela conteos
     tree_method="hist",         # rápido y eficiente en CPU
-    n_estimators=200,
+    n_estimators=5000,
     learning_rate=0.1,
+    callbacks= [EarlyStopping(rounds=50, save_best=True)],
     max_depth=3,
     enable_categorical=True,
+    verbosity=0
 )
 
 param_grid = {
-    'rfb__n_estimators': [100, 200, 300, 500],
-    'rfb__max_depth': [7, 9 ,12, 13, 14, 15],
-    'rfb__learning_rate': [0.0001, 0.009 ,0.01, 0.1, 0.2, 0.8, 5],
-    'rfb__subsample': [0.5, 0.8, 0.9, 1.0],
-    'rfb__colsample_bytree': [0.3, 0.8, 0.9, 1.0]
+    'max_depth': [7, 9 ,12, 13, 14, 15],
+    'learning_rate': [0.009 ,0.01, 0.1, 0.2, 0.8],
+    'subsample': [0.5, 0.8, 0.9, 1.0],
+    'colsample_bytree': [0.3, 0.8, 0.9, 1.0]
 }
+
+
+
 
 class TitanicPreprocessor():
     def __init__(self):
@@ -88,36 +95,57 @@ class TitanicPreprocessor():
 y=df.pop('Survived')
 
 data_preprocessor = TitanicPreprocessor()
-cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
 
 pipeline = Pipeline([('pre-processor', data_preprocessor), ('nosie remover', NoiseRemover()),('rfb', model)])
-#cv_scores = cross_val_score(pipeline, df, y, cv=cv, scoring='accuracy')
+prep = Pipeline([('pre-processor', TitanicPreprocessor()),('noise_remover', NoiseRemover())])
+
+
+
+X_tr, X_va, y_tr, y_va = train_test_split(df, y, test_size=0.2, stratify=y)
+X_tr_p = prep.fit_transform(X_tr, y_tr)  
+X_va_p  = prep.transform(X_va)   
+X_all_p = pd.concat([X_tr_p, X_va_p], axis=0)
+y_all   = pd.concat([y_tr, y_va], axis=0)
+test_fold = np.r_[[-1]*len(X_tr_p), [0]*len(X_va_p)]
+
+cv = PredefinedSplit(test_fold)   
 
 grid_search = GridSearchCV(
-    estimator=pipeline,
+    estimator=model,
     param_grid=param_grid,
     cv=cv,
     scoring='accuracy',
     n_jobs=-1,  # Use all available cores
-    verbose=1  # Print progress
+    verbose=0  # Print progress
 )
 
 
 print("Starting grid search...")
-grid_search.fit(df, y)
+
+
+
+grid_search.fit(X_all_p, y_all,eval_set=[(X_va_p, y_va)],verbose=False)
+
+best_xgb = grid_search.best_estimator_
+best_iter = getattr(best_xgb, "best_iteration", None)
+print("Best params:", grid_search.best_params_)
+print("Best (hold-out) score:", grid_search.best_score_)
+print("Best n_estimators (ES):", (best_iter + 1) if best_iter is not None else "N/A")
 
 # Best params found
-print("Best parameters:", grid_search.best_params_)
+#print("Best parameters:", grid_search.best_params_)
 
 # Best cross-validation score
-print("Best CV score:", grid_search.best_score_)
+#print("Best CV score:", grid_search.best_score_)
 
 
-cv_results = pd.DataFrame(grid_search.cv_results_)
+#cv_results = pd.DataFrame(grid_search.cv_results_)
 #print(cv_results[["params", "mean_test_score", "std_test_score"]])
 
 # pipeline.fit(df,y)
+
+#cv_scores = cross_val_score(pipeline, df, y, cv=cv, scoring='accuracy')
 
 #predictions_array=pipeline.predict(dt)
 #ids_to_predict=dt.pop('PassengerId')
