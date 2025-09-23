@@ -15,9 +15,11 @@ from titanic_preprocessor import TitanicPreprocessor
 from sklearn.model_selection import PredefinedSplit, GridSearchCV
 from xgboost.callback import EarlyStopping
 
-df = pd.read_csv("train.csv")
-dt = pd.read_csv("test.csv")
-pd.set_option('display.max_rows', None)
+from utils import load_config, load_datasets
+
+load_config()
+dt, df = load_datasets()
+
 
 
 model= XGBClassifier(
