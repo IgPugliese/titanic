@@ -21,7 +21,6 @@ load_config()
 dt, df = load_datasets()
 
 
-
 model= XGBClassifier(
     objective="binary:logistic",
     eval_metric="logloss",       # modela conteos
@@ -91,22 +90,6 @@ print("Best n_estimators (ES):", (best_iter + 1) if best_iter is not None else "
 
 #cv_results = pd.DataFrame(grid_search.cv_results_)
 #print(cv_results[["params", "mean_test_score", "std_test_score"]])
-
-# pipeline.fit(df,y)
-
-#cv_scores = cross_val_score(pipeline, df, y, cv=cv, scoring='accuracy')
-
-#predictions_array=pipeline.predict(dt)
-#ids_to_predict=dt.pop('PassengerId')
-#results = pd.DataFrame({'PassengerId' : ids_to_predict, 'Survived' : pd.Series(predictions_array)})
-#results.to_csv("submission.csv", index=False)
-#print(f"Mean CV Precision: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
-
-
-
-
-
-
 
 
 

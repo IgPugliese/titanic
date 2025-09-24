@@ -1,5 +1,7 @@
 import re
 
+import numpy as np
+
 
 class TitanicPreprocessor():
     def __init__(self):
