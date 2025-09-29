@@ -1,3 +1,6 @@
+from sklearn.utils.validation import check_is_fitted
+import numpy as np
+
 class NoiseRemover():
     def fit(self, X, y=None):
         return self
@@ -12,3 +15,4 @@ class NoiseRemover():
         del df["SibSp"]
         del df["Parch"]
         return df
+    
